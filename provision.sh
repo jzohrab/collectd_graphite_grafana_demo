@@ -1,14 +1,13 @@
 #!/bin/bash
 
-# This provision script follows the DigitalOcean tutorial:
-# https://www.digitalocean.com/community/tutorials/an-introduction-to-tracking-statistics-with-graphite-statsd-and-collectd
-
-# Part 1 of the tutorial is a description only, no configuration is done.
-
-#########################
-# Part 2: installing Graphite.
-
+# Update apt sources for Grafana
+cat <<EOF >> /etc/apt/sources.list
+deb https://packagecloud.io/grafana/stable/debian/ wheezy main
+EOF
+curl https://packagecloud.io/gpg.key | sudo apt-key add -
 apt-get update
+
+# Graphite
 export DEBIAN_FRONTEND=noninteractive
 apt-get install -y postgresql
 apt-get install -y --force-yes graphite-carbon
@@ -38,7 +37,7 @@ sed -i "s/'HOST': ''/'HOST': '127.0.0.1'/" $CONFIG
 # sync the database.
 # Ref http://stackoverflow.com/questions/1466827/
 graphite-manage syncdb --noinput
-# Create superuser account/password admin/admin.
+# Create superuser, account/password admin/admin.
 echo "from django.contrib.auth.models import User; User.objects.create_superuser('admin', 'admin@example.com', 'admin')" | graphite-manage shell
 
 # Configure Carbon
@@ -67,20 +66,14 @@ for v in 1 2 3; do
     sleep 10
 done
 
-#########################
-# part 3: adding collectd
-
+# Collectd
 apt-get install -y collectd collectd-utils
-
 sed -i 's/#Hostname.*/Hostname "graph_host"/' /etc/collectd/collectd.conf
-
-
 for x in apache cpu df entropy interface load memory \
 		processes rrdtool users write_graphite; do
     echo $x
     sed -i "s|#LoadPlugin ${x}|LoadPlugin ${x}|" /etc/collectd/collectd.conf
 done
-
 DEVICE=`df | grep ^/dev | awk '{ print $1 }'`
 cat <<EOF >> /etc/collectd/collectd.conf
 
@@ -139,13 +132,7 @@ service carbon-cache start
 service collectd stop
 service collectd start
 
-
 # Grafana
-cat <<EOF >> /etc/apt/sources.list
-deb https://packagecloud.io/grafana/stable/debian/ wheezy main
-EOF
-curl https://packagecloud.io/gpg.key | sudo apt-key add -
-apt-get update
 apt-get install -y grafana
 
 setcap 'cap_net_bind_service=+ep' /usr/sbin/grafana-server
